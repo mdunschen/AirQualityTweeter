@@ -2,11 +2,9 @@
 
 # coding: utf-8
 
-# In[9]:
-
-
-#get_ipython().magic('matplotlib')
 from optparse import OptionParser
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 from matplotlib.ticker import FormatStrFormatter
@@ -20,7 +18,6 @@ import html
 import sys, os
 import pickle
 from datetime import datetime, timedelta
-sys.path.append("C:\\Program Files\\Anaconda3\\envs\\tensorflow\\lib\\site-packages")
 import tweepy
 
 from collections import deque
@@ -465,13 +462,4 @@ if __name__ == "__main__":
                     tweet(s, replyto=rtweet)
         else:
             print("Reading already known")
-
-
-
-
-# 
-
-# In[ ]:
-
-
 
