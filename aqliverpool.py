@@ -149,9 +149,14 @@ def scrape():
     units = [O3, NO2, SO2, PM25, PM100]
     datanums = []
     for v in cols:
+        print(v)
+        value = 'not_set'
         if b' ' in v:
-            value = float(v[:v.index(b' ')])
-        elif b'n/a' in v:
+            try:
+              value = float(v[:v.index(b' ')])
+            except ValueError:
+              pass
+        if value == 'not_set' and b'n/a' in v:
             value = "n/a"
         else:
             value = float(v[:v.index(b'&')])
