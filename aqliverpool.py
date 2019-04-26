@@ -19,6 +19,7 @@ import sys, os
 import pickle
 from datetime import datetime, timedelta
 import tweepy
+import sqlite3
 
 from collections import deque
 
@@ -34,8 +35,18 @@ O3, NO2, SO2, PM25, PM100 = "O\u2083", "NO\u2082", "SO\u2082", "PM\u2082\u2085",
 guides = {O3:100, NO2:200, SO2:20, PM25:25, PM100:50} # source: http://apps.who.int/iris/bitstream/10665/69477/1/WHO_SDE_PHE_OEH_06.02_eng.pdf  
 meansWHO = {O3:'8h', NO2:'1h', SO2:'10m', PM25:'24h', PM100:'24h'}
 meansDEFRA = {O3:'8h', NO2:'1h', SO2:'max 15m', PM25:'24h', PM100:'24h'}
+consumer_key, consumer_secret, access_token, access_token_secret = None, None, None, None
 
-consumer_key, consumer_secret, access_token, access_token_secret = pickle.load(open("apikeys.bin", "rb")) 
+def loadAPIKeys():
+    global consumer_key, consumer_secret, access_token, access_token_secret
+    if os.path.isfile("apikeys.bin"):
+        consumer_key, consumer_secret, access_token, access_token_secret = pickle.load(open("apikeys.bin", "rb")) 
+    else:
+        consumer_key = input("consumer_key: ")
+        consumer_secret = input("consumer_secret: ")
+        access_token = input("access_token: ")
+        access_token_secret = input("access_token_secret: ")
+        pickle.dump((consumer_key, consumer_secret, access_token, access_token_secret), open("apikeys.bin", "wb"))
 
 def twitterAPI():
     auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
@@ -170,12 +181,70 @@ def scrape():
     reading = dict(zip(units, datanums))
     return day, clock, reading
 
+def convert(r):
+    # converts result from sqlite query to format we scrape of day, time, readings
+    # where readings is a dict with keys "units" and tuples as values
+    units = [O3, NO2, SO2, PM25, PM100]
+    converted = deque()
+    for e in r:
+        dt = datetime.strptime(e[1], "%Y-%m-%d %H:%M:%S.%f")
+        date = dt.strftime("%d/%m/%Y")
+        clock = dt.strftime("%H:%M:%S")
+        tpls = []
+        for v in e[2:]:
+            if v[:3] == "n/a":
+                tpls.append("n/a", '')
+            else:
+                m = re.match("(.*?)(\(.*?\))", v)
+                tpls.append((float(m.group(1)), m.group(2)))
+        assert len(tpls) == 5
+        converted.appendleft((date, clock, dict(zip(units, tpls))))
+    return converted
+
+
+
+def loadAllReadings(dbname):
+    db = sqlite3.connect(dbname)
+    c = db.cursor()
+    c.execute("SELECT * FROM readings")
+    return c.fetchall()
+
+def loadLastReading(dbname):
+    db = sqlite3.connect(dbname)
+    c = db.cursor()
+    c.execute("SELECT * FROM readings WHERE id in ( SELECT max(id) FROM readings)")
+    return c.fetchall()
+
 def loadReadings():
     fall = "allreadings.bin"
     allreadings = deque()
     if os.path.isfile(fall):
         allreadings = pickle.load(open(fall, "rb"))
     return allreadings
+
+def saveLastReading(dbname, date, time, reading, overwrt=False):
+    units = [O3, NO2, SO2, PM25, PM100]
+    db = sqlite3.connect(dbname)
+    c = db.cursor()
+    if overwrt:
+        c.execute(''' DROP TABLE IF EXISTS readings''')
+    e = '''
+        CREATE TABLE IF NOT EXISTS readings(id INTEGER PRIMARY KEY, date_time TEXT, %s TEXT, %s TEXT, %s TEXT, %s TEXT, %s TEXT)
+        ''' % tuple(units)
+    c.execute(e)
+    dt = datetime.strptime("%s %s" % (date, time), "%d/%m/%Y %H:%M:%S")
+    dts = dt.strftime("%Y-%m-%d %H:%M:%S.000")
+    c.execute("SELECT * FROM readings WHERE date_time=?", (dts,))
+    r = c.fetchall()
+    print(r)
+    if r:
+        print("Already exists")
+        return
+    e = '''INSERT INTO readings(date_time, %s, %s, %s, %s, %s) VALUES(?,?,?,?,?,?)''' % tuple(units)
+    t = (dts, "%s %s" % reading[O3], "%s %s"% reading[NO2], "%s %s" % reading[SO2], "%s %s" % reading[PM25], "%s %s" % reading[PM100])
+    c.execute(e, t)
+    db.commit()
+    db.close()
 
 def pickleReadings(allreading):
     fall = "allreadings.bin"
@@ -227,7 +296,6 @@ def getAndPickleWeather(fn, readings):
     print("Pickled ", len(alltweets), " tweets")
 
 def loadWeatherTweets(fn):
-    #wt = pickle.load(open("weathertweets.bin", "rb"))
     wt = pickle.load(open(fn, "rb"))
     d0 = wt[0]["datetime"]
     for t in wt[1:]:
@@ -404,21 +472,26 @@ if __name__ == "__main__":
     
     
     mode = options.mode
+    loadAPIKeys()
 
-    allreadings = loadReadings()
+    #allreadings = loadReadings()
     # remove duplicate entries (could have come in while debugging)
-    ic = 0
-    while ic < len(allreadings):
-        r = allreadings[ic]
-        while allreadings.count(r) > 1:
-            allreadings.remove(r)
-        ic += 1 
+    #ic = 0
+    #while ic < len(allreadings):
+    #    r = allreadings[ic]
+    #    while allreadings.count(r) > 1:
+    #        allreadings.remove(r)
+    #    ic += 1 
 
 
     if mode == 'debug':
-        stat = tweet("TTEESSTT")
-        print(stat)
-        #tweet("In reply to: TEST3", stat)
+        #day, clock, reading = scrape()
+        #saveLastReading("readings.db", day, clock, reading)
+        r = loadLastReading("readings.db")
+        c = convert(r)
+        print(c)
+        print(scrape())
+        xxxxx
 
     elif mode == 'saveweather':
         allreadings = loadReadings()
@@ -447,17 +520,18 @@ if __name__ == "__main__":
 
 
     else:
-        if allreadings:
-            lastday, lastclock, lastreading = allreadings[0]
-        else:
-            lastday, lastclock, lastreadings = None, None, None
         day, clock, reading = scrape()
+        r = loadLastReading("readings.db")
+        converted = convert(r)
+        assert(len(converted) == 1)
+        lastday, lastclock, lastreading = converted[-1]
         if ((day, clock) != (lastday, lastclock)):
             status = compose(day, clock, reading)
             rtweet = tweet(status)
 
-            allreadings.appendleft((day, clock, reading))
-            pickleReadings(allreadings)
+            saveLastReading("readings.db", day, clock, reading)
+            allreadings = convert(loadAllReadings("readings.db"))
+
 
             # compare with WHO recommendations
             r = allreadings and compareWHO(allreadings)
