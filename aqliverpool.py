@@ -60,7 +60,6 @@ def tweet(status, replyto=None, imgfilename=None):
     if not (status or imgfilename):
         return
     urls = re.findall('http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', status)
-    print("urls = ", urls)
     # take out all url texts from status for count, all urls count as 23
     rstat = status
     for u in urls:
@@ -160,7 +159,6 @@ def scrape():
     units = [O3, NO2, SO2, PM25, PM100]
     datanums = []
     for v in cols:
-        print(v)
         value = 'not_set'
         if b' ' in v:
             try:
@@ -193,7 +191,7 @@ def convert(r):
         tpls = []
         for v in e[2:]:
             if v[:3] == "n/a":
-                tpls.append("n/a", '')
+                tpls.append(("n/a", ''))
             else:
                 m = re.match("(.*?)(\(.*?\))", v)
                 tpls.append((float(m.group(1)), m.group(2)))
@@ -236,7 +234,6 @@ def saveLastReading(dbname, date, time, reading, overwrt=False):
     dts = dt.strftime("%Y-%m-%d %H:%M:%S.000")
     c.execute("SELECT * FROM readings WHERE date_time=?", (dts,))
     r = c.fetchall()
-    print(r)
     if r:
         print("Already exists")
         return
@@ -509,7 +506,6 @@ if __name__ == "__main__":
             datelast += timedelta(hours=12)
         else:
             datelast = datetime.today() - timedelta(days=100)
-        print(datelast)
         sincelastplot = (datetime.today() - datelast)
         if (sincelastplot > timedelta(hours=24 * 3)):
             allreadings.reverse()
