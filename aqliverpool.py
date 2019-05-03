@@ -8,6 +8,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import matplotlib.patches as patches
+import matplotlib.patheffects as patheffects
 from matplotlib.ticker import FormatStrFormatter
 from matplotlib.ticker import AutoMinorLocator
 from matplotlib.colors import LinearSegmentedColormap
@@ -342,7 +343,8 @@ def testCMap():
 
 
 
-def drawGauge(frame, rad, valmin, limit, valmax, dates, data, ax):
+def drawGauge(frame, rad, valmin, limit, valmax, dates, data, C, ax):
+    titles = {O3: r"$O_3$", NO2: r"$NO_2$", SO2: r"$SO_2$", PM25: r"$PM_{2.5}$", PM100: r"$PM_{10}$"}
     global apatch
     # transform value to angle between 0=valmin and 180=valmax
     print(frame)
@@ -351,8 +353,9 @@ def drawGauge(frame, rad, valmin, limit, valmax, dates, data, ax):
     sx, sy = -rad * math.cos(svalue), rad * math.sin(svalue)
     if apatch:
         apatch.remove()
-    arrow = patches.FancyArrow(0, 0, sx, sy, color="orange", width=0.05, length_includes_head=True, head_width=0.07)
+    arrow = patches.FancyArrow(0, 0, sx, sy, color="orange", width=0.05, length_includes_head=True, head_width=0.07, path_effects=[patheffects.SimpleLineShadow(), patheffects.Normal()])
     apatch = ax.add_patch(arrow)
+    ax.set_title(titles[C] + " %s" % dates[frame].strftime("%d/%m/%Y %H:%M"), fontsize=10) 
 
 
 def plotRadial(readings, C):
@@ -385,7 +388,7 @@ def plotRadial(readings, C):
     ax.set_aspect("equal")
     #def drawGauge(frame, rad, valmin, limit, valmax, dates, data):
     anim = FuncAnimation(fig, drawGauge, frames=np.arange(0, len(data)), 
-            fargs=(rad, valmin, limit, valmax, dates, data, ax), interval=50)
+            fargs=(rad, valmin, limit, valmax, dates, data, C, ax), interval=80)
     anim.save("test.gif", dpi=80, writer='imagemagick')
     plt.close(fig)
 
