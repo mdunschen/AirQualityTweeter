@@ -7,9 +7,11 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
+import matplotlib.patches as patches
 from matplotlib.ticker import FormatStrFormatter
 from matplotlib.ticker import AutoMinorLocator
 from matplotlib.colors import LinearSegmentedColormap
+from matplotlib.animation import FuncAnimation
 import numpy as np
 import urllib
 from urllib import request
@@ -20,9 +22,11 @@ import pickle
 from datetime import datetime, timedelta
 import tweepy
 import sqlite3
+import math
 
 from collections import deque
 
+apatch = None
 urlstr = "https://uk-air.defra.gov.uk/latest/currentlevels?view=site#L"
 shorturlstr = "https://goo.gl/ZpELjS"
 
@@ -338,6 +342,53 @@ def testCMap():
 
 
 
+def drawGauge(frame, rad, valmin, limit, valmax, dates, data, ax):
+    global apatch
+    # transform value to angle between 0=valmin and 180=valmax
+    print(frame)
+    value = data[frame]
+    svalue = ((value - valmin) / (valmax - valmin)) * math.pi
+    sx, sy = -rad * math.cos(svalue), rad * math.sin(svalue)
+    if apatch:
+        apatch.remove()
+    arrow = patches.FancyArrow(0, 0, sx, sy, color="orange", width=0.05, length_includes_head=True, head_width=0.07)
+    apatch = ax.add_patch(arrow)
+
+
+def plotRadial(readings, C):
+    titles = {O3: r"$O_3$", NO2: r"$NO_2$", SO2: r"$SO_2$", PM25: r"$PM_{2.5}$", PM100: r"$PM_{10}$"}
+
+    dates = [toDT(d, c) for d, c, r in readings]
+    data = [r[C][0] for d, c, r in readings] # data
+
+    newdates, newdata = [], []
+    for date, val in zip(dates, data):
+        if val != 'n/a':
+            newdates.append(date)
+            newdata.append(val)
+
+    data = newdata
+    dates = newdates
+    d0, d1 = dates[0], dates[-1] # date range
+
+    fig = plt.figure()  
+    ax = fig.add_subplot(1,1,1) 
+    circle = patches.Circle((0, 0), 0.06, color="orange")
+    ax.add_artist(circle)
+    # 50% available for valmin to valmax, where is limit
+    valmin = 0
+    valmax = 1.2 * guides[C]
+    limit = guides[C]
+    lim = (limit - valmin)/(valmax - valmin) * 50.0
+    rad = 0.9
+    ax.pie([lim,50-lim,50], colors=[(0.8, 1, 0.8), (1, 0.8, 0.8), "white"], wedgeprops = {'linewidth': 0}, counterclock=False, startangle=180)
+    ax.set_aspect("equal")
+    #def drawGauge(frame, rad, valmin, limit, valmax, dates, data):
+    anim = FuncAnimation(fig, drawGauge, frames=np.arange(0, len(data)), 
+            fargs=(rad, valmin, limit, valmax, dates, data, ax), interval=50)
+    anim.save("test.gif", dpi=80, writer='imagemagick')
+    plt.close(fig)
+
 def plotLinear(readings, C):
     titles = {O3: r"$O_3$", NO2: r"$NO_2$", SO2: r"$SO_2$", PM25: r"$PM_{2.5}$", PM100: r"$PM_{10}$"}
 
@@ -484,14 +535,21 @@ if __name__ == "__main__":
     if mode == 'debug':
         #day, clock, reading = scrape()
         #saveLastReading("readings.db", day, clock, reading)
-        r = loadLastReading("readings.db")
-        c = convert(r)
-        print(c)
-        print(scrape())
+        #r = loadLastReading("readings.db")
+        #c = convert(r)
+        #print(c)
+        #print(scrape())
+        datelast = datetime.today() - timedelta(days=100)
+        sincelastplot = (datetime.today() - datelast)
+        if (sincelastplot > timedelta(hours=24 * 3)):
+            allreadings = convert(loadAllReadings("readings.db"))
+            allreadings.reverse()
+            readings = [(d, h, r) for (d, h, r) in allreadings if toDT(d, h) >= datelast]
+        plotRadial(readings, PM25)
         xxxxx
 
     elif mode == 'saveweather':
-        allreadings = loadReadings()
+        allreadings = convert(loadAllReadings("readings.db"))
         getAndPickleWeather("weathertweets.bin", allreadings)
 
     elif mode == 'plotpollution':
@@ -508,11 +566,12 @@ if __name__ == "__main__":
             datelast = datetime.today() - timedelta(days=100)
         sincelastplot = (datetime.today() - datelast)
         if (sincelastplot > timedelta(hours=24 * 3)):
+            allreadings = convert(loadAllReadings("readings.db"))
             allreadings.reverse()
             readings = [(d, h, r) for (d, h, r) in allreadings if toDT(d, h) >= datelast]
             figure = plotLinear(readings, PM25)
             d0, d1 = toDT(readings[0][0], readings[0][1]), toDT(readings[-1][0], readings[-1][1])
-            tweet(PM25 + "\n%s - %s" % (d0.strftime("%d/%m/%Y"), d1.strftime("%d/%m/%Y")), None, figure)
+            #tweet(PM25 + "\n%s - %s" % (d0.strftime("%d/%m/%Y"), d1.strftime("%d/%m/%Y")), None, figure)
 
 
     else:
