@@ -13,6 +13,7 @@ from matplotlib.ticker import FormatStrFormatter
 from matplotlib.ticker import AutoMinorLocator
 from matplotlib.colors import LinearSegmentedColormap
 from matplotlib.animation import FuncAnimation
+from matplotlib.text import Annotation, Text
 import numpy as np
 import urllib
 from urllib import request
@@ -341,25 +342,75 @@ def testCMap():
 
     plt.show()
 
+def Along(lam, a, b):
+    return lam * b + (1.0 - lam) * a
+
+class Gauge:
+    def __init__(self, dates, data, C):
+        self.dates = dates
+        self.data = data
+        self.C = C
+        self.titles = {O3: r"$O_3$", NO2: r"$NO_2$", SO2: r"$SO_2$", PM25: r"$PM_{2.5}$", PM100: r"$PM_{10}$"}
+        self.maxValue = None
+
+        self.fig = plt.figure()  
+        self.ax = self.fig.add_subplot(1,1,1) 
+
+        circle = patches.Circle((0, 0), 0.06, color="orange", path_effects=[patheffects.SimplePatchShadow(), patheffects.Normal()])
+        circle.zorder = 200
+        self.ax.add_artist(circle)
+        # 50% available for valmin to valmax, where is limit
+        self.valmin = 0
+        self.valmax = 1.2 * guides[C]
+        self.wholimit = guides[C]
+        lim = (self.wholimit - self.valmin)/(self.valmax - self.valmin) * 50.0
+        self.rad = 0.9
+        self.ax.pie([lim,50-lim,50], colors=[(0.8, 1, 0.8), (1, 0.8, 0.8), "white"], wedgeprops = {'linewidth': 0}, counterclock=False, startangle=180)
+        
+        self.ax.set_aspect("equal")
+        self.apatch = None
+        self.addLabels()
+    
+    def toDialPos(self, value):
+        theta = ((value - self.valmin) / (self.valmax - self.valmin)) * math.pi
+        sx, sy = -self.rad * math.cos(theta), self.rad * math.sin(theta)
+        return sx, sy, theta
+
+    def drawGauge(self, frame):
+        # transform value to angle between 0=valmin and 180=valmax
+        print("frame: ", frame)
+        value = self.data[frame]
+        sx, sy, theta = self.toDialPos(value)
+        if self.apatch:
+            self.apatch.remove()
+        arrow = patches.FancyArrow(0, 0, sx, sy, color="orange", width=0.05, length_includes_head=True, head_width=0.07, path_effects=[patheffects.SimplePatchShadow(), patheffects.Normal()])
+        self.apatch = self.ax.add_patch(arrow)
+        self.apatch.zorder = 100
+        self.ax.set_title(self.titles[self.C] + " %s" % self.dates[frame].strftime("%d/%m/%Y %H:%M"), fontsize=10) 
+
+        # draw the max value
+        if self.maxValue == None or value > self.maxValue:
+            rx, ry = -(self.rad-0.07) * math.cos(theta), (self.rad-0.07) * math.sin(theta)
+            tx, ty = -0.07 * math.cos(theta), 0.07 * math.sin(theta)
+            arrow = patches.FancyArrow(rx, ry, tx, ty, color="red", width=0.0, length_includes_head=True, head_width=0.07, path_effects=[patheffects.SimplePatchShadow(), patheffects.Normal()])
+            if self.maxValue != None:
+                self.aMaxPatch.remove()
+            self.aMaxPatch = self.ax.add_patch(arrow)
+            self.maxValue = value
 
 
-def drawGauge(frame, rad, valmin, limit, valmax, dates, data, C, ax):
-    titles = {O3: r"$O_3$", NO2: r"$NO_2$", SO2: r"$SO_2$", PM25: r"$PM_{2.5}$", PM100: r"$PM_{10}$"}
-    global apatch
-    # transform value to angle between 0=valmin and 180=valmax
-    print(frame)
-    value = data[frame]
-    svalue = ((value - valmin) / (valmax - valmin)) * math.pi
-    sx, sy = -rad * math.cos(svalue), rad * math.sin(svalue)
-    if apatch:
-        apatch.remove()
-    arrow = patches.FancyArrow(0, 0, sx, sy, color="orange", width=0.05, length_includes_head=True, head_width=0.07, path_effects=[patheffects.SimpleLineShadow(), patheffects.Normal()])
-    apatch = ax.add_patch(arrow)
-    ax.set_title(titles[C] + " %s" % dates[frame].strftime("%d/%m/%Y %H:%M"), fontsize=10) 
 
+
+    def addLabels(self):
+        # numbers around the top
+        for i in range(11):
+            value = Along(i/10.0, self.valmin, self.valmax)
+            sx, sy, theta = self.toDialPos(value)
+            self.ax.add_artist(Text(sx, sy, text="%.0f" % value, verticalalignment='baseline', horizontalalignment='center', rotation=90.0 - math.degrees(theta)))
+        # label what we are showing
+        self.ax.add_artist(Text(0, self.rad/2, text=self.titles[self.C], verticalalignment='baseline', horizontalalignment='center'))
 
 def plotRadial(readings, C):
-    titles = {O3: r"$O_3$", NO2: r"$NO_2$", SO2: r"$SO_2$", PM25: r"$PM_{2.5}$", PM100: r"$PM_{10}$"}
 
     dates = [toDT(d, c) for d, c, r in readings]
     data = [r[C][0] for d, c, r in readings] # data
@@ -374,23 +425,12 @@ def plotRadial(readings, C):
     dates = newdates
     d0, d1 = dates[0], dates[-1] # date range
 
-    fig = plt.figure()  
-    ax = fig.add_subplot(1,1,1) 
-    circle = patches.Circle((0, 0), 0.06, color="orange")
-    ax.add_artist(circle)
-    # 50% available for valmin to valmax, where is limit
-    valmin = 0
-    valmax = 1.2 * guides[C]
-    limit = guides[C]
-    lim = (limit - valmin)/(valmax - valmin) * 50.0
-    rad = 0.9
-    ax.pie([lim,50-lim,50], colors=[(0.8, 1, 0.8), (1, 0.8, 0.8), "white"], wedgeprops = {'linewidth': 0}, counterclock=False, startangle=180)
-    ax.set_aspect("equal")
-    #def drawGauge(frame, rad, valmin, limit, valmax, dates, data):
-    anim = FuncAnimation(fig, drawGauge, frames=np.arange(0, len(data)), 
-            fargs=(rad, valmin, limit, valmax, dates, data, C, ax), interval=80)
+    gauge = Gauge(dates, data, C)
+    framlist = [0, 0, 0, 0, 0, 0, 0, 0]
+    framlist.extend(range(len(data)))
+    anim = FuncAnimation(gauge.fig, gauge.drawGauge, frames=framlist, interval=80)
     anim.save("test.gif", dpi=80, writer='imagemagick')
-    plt.close(fig)
+    plt.close(gauge.fig)
 
 def plotLinear(readings, C):
     titles = {O3: r"$O_3$", NO2: r"$NO_2$", SO2: r"$SO_2$", PM25: r"$PM_{2.5}$", PM100: r"$PM_{10}$"}
