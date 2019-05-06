@@ -381,7 +381,6 @@ class Gauge:
 
     def drawGauge(self, frame):
         # transform value to angle between 0=valmin and 180=valmax
-        print("frame: ", frame)
         value = self.data[frame]
         dialColor = "orange"
         if value == "n/a":
@@ -410,10 +409,10 @@ class Gauge:
             self.maxArtist.remove()
         if dialColor == "grey":
             self.ax.set_title(self.titles[self.C] + " %s" % self.dates[frame].strftime("%d/%m/%Y %H:%M"), fontsize=12) 
-            self.maxArtist = self.ax.add_artist(Text(0, 1.3 * self.rad, text="No readings recorded!", verticalalignment='baseline', horizontalalignment='center'))
+            self.maxArtist = self.ax.add_artist(Text(0, 1.25 * self.rad, text="No readings recorded!", verticalalignment='baseline', horizontalalignment='center'))
         else:
             self.ax.set_title(self.titles[self.C] + " %s" % self.dates[frame].strftime("%d/%m/%Y %H:%M"), fontsize=12) 
-            self.maxArtist = self.ax.add_artist(Text(0, 1.3 * self.rad, text="%s" % (self.maximTitle), verticalalignment='baseline', horizontalalignment='center'))
+            self.maxArtist = self.ax.add_artist(Text(0, 1.25 * self.rad, text="%s" % (self.maximTitle), verticalalignment='baseline', horizontalalignment='center'))
 
 
     def addLabels(self):
