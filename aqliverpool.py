@@ -351,6 +351,7 @@ class Gauge:
         self.data = data
         self.C = C
         self.titles = {O3: r"$O_3$", NO2: r"$NO_2$", SO2: r"$SO_2$", PM25: r"$PM_{2.5}$", PM100: r"$PM_{10}$"}
+        self.mgpqm = "${\mu gm^{-3}}$"
         self.maxValue = None
 
         self.fig = plt.figure()  
@@ -369,6 +370,8 @@ class Gauge:
         
         self.ax.set_aspect("equal")
         self.apatch = None
+        self.maxArtist = None
+        self.lastValue = 0.0
         self.addLabels()
     
     def toDialPos(self, value):
@@ -380,25 +383,37 @@ class Gauge:
         # transform value to angle between 0=valmin and 180=valmax
         print("frame: ", frame)
         value = self.data[frame]
+        dialColor = "orange"
+        if value == "n/a":
+            value = self.lastValue
+            dialColor = "grey"
+        self.lastValue = value
         sx, sy, theta = self.toDialPos(value)
         if self.apatch:
             self.apatch.remove()
-        arrow = patches.FancyArrow(0, 0, sx, sy, color="orange", width=0.05, length_includes_head=True, head_width=0.07, path_effects=[patheffects.SimplePatchShadow(), patheffects.Normal()])
+        arrow = patches.FancyArrow(0, 0, sx, sy, color=dialColor, width=0.05, length_includes_head=True, head_width=0.07, path_effects=[patheffects.SimplePatchShadow(), patheffects.Normal()])
         self.apatch = self.ax.add_patch(arrow)
         self.apatch.zorder = 100
-        self.ax.set_title(self.titles[self.C] + " %s" % self.dates[frame].strftime("%d/%m/%Y %H:%M"), fontsize=10) 
 
         # draw the max value
         if self.maxValue == None or value > self.maxValue:
-            rx, ry = -(self.rad-0.07) * math.cos(theta), (self.rad-0.07) * math.sin(theta)
-            tx, ty = -0.07 * math.cos(theta), 0.07 * math.sin(theta)
+            rx, ry = -(self.rad+0.07) * math.cos(theta), (self.rad+0.07) * math.sin(theta)
+            tx, ty = 0.07 * math.cos(theta), -0.07 * math.sin(theta)
             arrow = patches.FancyArrow(rx, ry, tx, ty, color="red", width=0.0, length_includes_head=True, head_width=0.07, path_effects=[patheffects.SimplePatchShadow(), patheffects.Normal()])
             if self.maxValue != None:
                 self.aMaxPatch.remove()
             self.aMaxPatch = self.ax.add_patch(arrow)
             self.maxValue = value
+            self.maximTitle = "\n Maximum: %.1f%s, %s" % (self.maxValue, self.mgpqm, self.dates[frame].strftime("%d/%m/%Y %H:%M")) 
 
-
+        if self.maxArtist:
+            self.maxArtist.remove()
+        if dialColor == "grey":
+            self.ax.set_title(self.titles[self.C] + " %s" % self.dates[frame].strftime("%d/%m/%Y %H:%M"), fontsize=12) 
+            self.maxArtist = self.ax.add_artist(Text(0, 1.3 * self.rad, text="No readings recorded!", verticalalignment='baseline', horizontalalignment='center'))
+        else:
+            self.ax.set_title(self.titles[self.C] + " %s" % self.dates[frame].strftime("%d/%m/%Y %H:%M"), fontsize=12) 
+            self.maxArtist = self.ax.add_artist(Text(0, 1.3 * self.rad, text="%s" % (self.maximTitle), verticalalignment='baseline', horizontalalignment='center'))
 
 
     def addLabels(self):
@@ -408,29 +423,24 @@ class Gauge:
             sx, sy, theta = self.toDialPos(value)
             self.ax.add_artist(Text(sx, sy, text="%.0f" % value, verticalalignment='baseline', horizontalalignment='center', rotation=90.0 - math.degrees(theta)))
         # label what we are showing
-        self.ax.add_artist(Text(0, self.rad/2, text=self.titles[self.C], verticalalignment='baseline', horizontalalignment='center'))
+        self.ax.add_artist(Text(0, self.rad/2, text="%s\n[%s]" % (self.titles[self.C], self.mgpqm), verticalalignment='baseline', horizontalalignment='center'))
+        # WHO guide information
+        self.ax.add_artist(Text(0, -0.2 * self.rad, text="WHO Limit: %s%s" % (guides[self.C], self.mgpqm), verticalalignment='baseline', horizontalalignment='center', color=(1, 0.8, 0.8)))
 
 def plotRadial(readings, C):
-
     dates = [toDT(d, c) for d, c, r in readings]
     data = [r[C][0] for d, c, r in readings] # data
 
-    newdates, newdata = [], []
-    for date, val in zip(dates, data):
-        if val != 'n/a':
-            newdates.append(date)
-            newdata.append(val)
-
-    data = newdata
-    dates = newdates
     d0, d1 = dates[0], dates[-1] # date range
 
     gauge = Gauge(dates, data, C)
     framlist = [0, 0, 0, 0, 0, 0, 0, 0]
     framlist.extend(range(len(data)))
-    anim = FuncAnimation(gauge.fig, gauge.drawGauge, frames=framlist, interval=80)
-    anim.save("test.gif", dpi=80, writer='imagemagick')
+    anim = FuncAnimation(gauge.fig, gauge.drawGauge, frames=framlist, interval=200)
+    fn = "gauge_%s.gif" % d1.strftime("%Y%m%d%H%M")
+    anim.save(fn, dpi=100, writer='imagemagick')
     plt.close(gauge.fig)
+    return fn
 
 def plotLinear(readings, C):
     titles = {O3: r"$O_3$", NO2: r"$NO_2$", SO2: r"$SO_2$", PM25: r"$PM_{2.5}$", PM100: r"$PM_{10}$"}
@@ -555,7 +565,7 @@ if __name__ == "__main__":
                       type='choice',
                       action='store',
                       dest='mode',
-                      choices=['plotpollution', 'debug', 'saveweather', 'plotpollutionLinear', 'regular'],
+                      choices=['plotpollution', 'debug', 'saveweather', 'plotpollutionLinear', 'plotRadial', 'regular'],
                       default='regular',
                       help='Choose mode',)
     (options, args) = parser.parse_args()
@@ -582,14 +592,20 @@ if __name__ == "__main__":
         #c = convert(r)
         #print(c)
         #print(scrape())
-        datelast = datetime.today() - timedelta(days=100)
+        # find when we last posted an image
+        files = [f for f in os.listdir('.') if re.match("gauge_[0-9]*.gif", f)]
+        if files:
+            datelast = max([datetime.strptime(f, "gauge_%Y%m%d%H%M.gif") for f in files])
+        else:
+            datelast = datetime.today() - timedelta(days=100)
         sincelastplot = (datetime.today() - datelast)
-        if (sincelastplot > timedelta(hours=24 * 3)):
+        if (sincelastplot > timedelta(hours=24 * 2)):
             allreadings = convert(loadAllReadings("readings.db"))
             allreadings.reverse()
             readings = [(d, h, r) for (d, h, r) in allreadings if toDT(d, h) >= datelast]
-        plotRadial(readings, PM25)
-        xxxxx
+            d0, d1 = toDT(readings[0][0], readings[0][1]), toDT(readings[-1][0], readings[-1][1])
+            fn = plotRadial(readings, PM25)
+            #tweet(PM25 + "\n%s - %s" % (d0.strftime("%d/%m/%Y"), d1.strftime("%d/%m/%Y")), None, fn)
 
     elif mode == 'saveweather':
         allreadings = convert(loadAllReadings("readings.db"))
@@ -598,6 +614,21 @@ if __name__ == "__main__":
     elif mode == 'plotpollution':
         weathertweets = loadWeatherTweets("weathertweets.bin")
         plotPolar(allreadings, weathertweets)
+
+    elif mode == 'plotRadial':
+        files = [f for f in os.listdir('.') if re.match("gauge_[0-9]*.gif", f)]
+        if files:
+            datelast = max([datetime.strptime(f, "gauge_%Y%m%d%H%M.gif") for f in files])
+        else:
+            datelast = datetime.today() - timedelta(days=100)
+        sincelastplot = (datetime.today() - datelast)
+        if (sincelastplot > timedelta(hours=24 * 2)):
+            allreadings = convert(loadAllReadings("readings.db"))
+            allreadings.reverse()
+            readings = [(d, h, r) for (d, h, r) in allreadings if toDT(d, h) >= datelast]
+            d0, d1 = toDT(readings[0][0], readings[0][1]), toDT(readings[-1][0], readings[-1][1])
+            fn = plotRadial(readings, PM25)
+            tweet(PM25 + "\n%s - %s" % (d0.strftime("%d/%m/%Y"), d1.strftime("%d/%m/%Y")), None, fn)
 
     elif mode == "plotpollutionLinear":
         # find when we last posted an image
