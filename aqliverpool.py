@@ -356,6 +356,10 @@ class Gauge:
 
         self.fig = plt.figure()  
         self.ax = self.fig.add_subplot(1,1,1) 
+        self.ax.set_xlim([-1.2, 1.2])
+        self.ax.set_ylim([-0.2, 1.2])
+        self.ax.set_aspect("equal")
+        plt.axis('off')
 
         circle = patches.Circle((0, 0), 0.06, color="orange", path_effects=[patheffects.SimplePatchShadow(), patheffects.Normal()])
         circle.zorder = 200
@@ -364,11 +368,13 @@ class Gauge:
         self.valmin = 0
         self.valmax = 1.2 * guides[C]
         self.wholimit = guides[C]
-        lim = (self.wholimit - self.valmin)/(self.valmax - self.valmin) * 50.0
         self.rad = 0.9
-        self.ax.pie([lim,50-lim,50], colors=[(0.8, 1, 0.8), (1, 0.8, 0.8), "white"], wedgeprops = {'linewidth': 0}, counterclock=False, startangle=180)
+        lim = 180.0*(1.0 - self.toDialPos(self.wholimit)[2] / math.pi)
+        wedgeBelow = patches.Wedge((0, 0), 1.0, lim, 180.0, color=(0.8, 1, 0.8))
+        wedgeAbove = patches.Wedge((0, 0), 1.0, 0.0, lim, color=(1, 0.8, 0.8))
+        self.ax.add_patch(wedgeBelow)
+        self.ax.add_patch(wedgeAbove)
         
-        self.ax.set_aspect("equal")
         self.apatch = None
         self.maxArtist = None
         self.lastValue = 0.0
