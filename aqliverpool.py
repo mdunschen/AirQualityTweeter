@@ -191,7 +191,10 @@ def convert(r):
     units = [O3, NO2, SO2, PM25, PM100]
     converted = deque()
     for e in r:
-        dt = datetime.strptime(e[1], "%Y-%m-%d %H:%M:%S.%f")
+        if (e[1] == "19-11-15 Nov:11:1573840800.000"): # a muddled up entry
+            dt = datetime.strptime(e[1], "%y-%m-%d Nov:11:1573840800.000")
+        else:
+            dt = datetime.strptime(e[1], "%Y-%m-%d %H:%M:%S.%f")
         date = dt.strftime("%d/%m/%Y")
         clock = dt.strftime("%H:%M:%S")
         tpls = []
@@ -236,7 +239,12 @@ def saveLastReading(dbname, date, time, reading, overwrt=False):
         CREATE TABLE IF NOT EXISTS readings(id INTEGER PRIMARY KEY, date_time TEXT, %s TEXT, %s TEXT, %s TEXT, %s TEXT, %s TEXT)
         ''' % tuple(units)
     c.execute(e)
-    dt = datetime.strptime("%s %s" % (date, time), "%d/%m/%Y %H:%M:%S")
+    dtConvert = "%s %s" % (date, time)
+    m = re.match("[0-9]{1,2}\/[0-9]{2}\/[0-9]{4} [0-9]{2}\:[0-9]{2}\:[0-9]*", dtConvert)
+    if m:
+        dt = datetime.strptime(dtConvert, "%d/%m/%Y %H:%M:%S")
+    else:
+        dt = datetime.strptime(dtConvert, "%d/%m/%Y %H:%M")
     dts = dt.strftime("%Y-%m-%d %H:%M:%S.000")
     c.execute("SELECT * FROM readings WHERE date_time=?", (dts,))
     r = c.fetchall()
